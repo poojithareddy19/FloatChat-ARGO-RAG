@@ -6,7 +6,7 @@ Two kinds of question, one system. **What does the archive hold?** is answered f
 
 Both halves are built around one constraint: being confidently wrong is worse than saying nothing. The summaries path cites its source and declines when the evidence is thin. The data path shows the exact query that produced the table, and that query runs as a read-only database user after passing a validator.
 
-> **Build status.** Working end to end: NetCDF ingestion of real Argo profiles with core and biogeochemical parameters and per-parameter QC, a semantic layer of float and region summaries in pgvector that both answers questions directly with citations and tells the SQL generator what the database actually holds, text-to-SQL with a four-layer safety path, a rule-first query router, conversational follow-ups, a second in-situ platform in 187 drifting buoys, ocean charts including overlaid profile comparisons, a FastAPI service and a React front end that draws the charts, with the Docker stage proven and images published from CI. Measured: [0.617 execution accuracy](#results) on 67 SQL questions, [7/7 correct refusals](#closing-it-without-the-model), and [hit@5 of 0.957](#retrieval-results) on 23 summary questions. See [Limitations](#limitations) and [Roadmap](#roadmap).
+> **Build status.** Working end to end: NetCDF ingestion of real Argo profiles with core and biogeochemical parameters and per-parameter QC, a semantic layer of float and region summaries in pgvector that both answers questions directly with citations and tells the SQL generator what the database actually holds, text-to-SQL with a four-layer safety path, a rule-first query router, conversational follow-ups, a second in-situ platform in 187 drifting buoys, ocean charts including overlaid profile comparisons, a FastAPI service and a React front end that draws the charts, with the Docker stage proven and images published from CI. Measured: [0.667 execution accuracy](#results) on 67 SQL questions, [7/7 correct refusals](#closing-it-without-the-model), and [hit@5 of 0.957](#retrieval-results) on 23 summary questions. See [Limitations](#limitations) and [Roadmap](#roadmap).
 
 ---
 
@@ -438,30 +438,52 @@ summaries, buckets, detail = evaluate_runs(runs=3)
 
 The set was 52 questions and entirely Argo until the `drifter` bucket was added. Every figure below is the larger set, so it is not comparable line by line with the 0.620 and 0.609 quoted elsewhere in this README, which were measured on the 52.
 
-`llama3.1:8b` is the default the system ships with. The first column is the current system, measured on 2026-09-26 after the [prompt stopped being cut](#the-prompt-was-being-cut). The other two are the earlier measurements, kept for comparison: `llama3.1:8b` and `qwen2.5-coder:7b`, a code specialist, on the same 67 questions with the previous prompt and Ollama's default 4,096-token window. They were run to find out whether the ceilings this benchmark keeps hitting are the model's or the prompt's.
+`llama3.1:8b` is the default the system ships with. The first column is the current system, measured on 2026-09-27 with the [answer checks](#the-answer-checks-measured) in place. The second is the same model the day before, after the [prompt stopped being cut](#the-prompt-was-being-cut) and before the checks. The last two are the earlier measurements, kept for comparison: `llama3.1:8b` and `qwen2.5-coder:7b`, a code specialist, on the same 67 questions with the previous prompt and Ollama's default 4,096-token window. They were run to find out whether the ceilings this benchmark keeps hitting are the model's or the prompt's.
 
-| Metric | `llama3.1:8b`, current | `llama3.1:8b`, earlier | `qwen2.5-coder:7b`, earlier |
-| ------------------------- | ----- | ----- | ----- |
-| **Execution accuracy**    | **0.617** (37/60) | 0.567 (34/60) | 0.483 |
-| Validation pass rate      | 1.000 | 0.983 | 0.967 |
-| Execution rate            | 0.967 | 0.933 | 0.850 |
-| **Correct refusal rate**  | **1.000 (7/7)** | 1.000 (7/7) | 0.857 (6/7) |
-| False refusal rate        | 0.000 | 0.017 | 0.050 |
-| Median latency            | 38.5 s | 31.5 s | 50.2 s |
+| Metric | `llama3.1:8b`, current | `llama3.1:8b`, before the checks | `llama3.1:8b`, earlier | `qwen2.5-coder:7b`, earlier |
+| ------------------------- | ----- | ----- | ----- | ----- |
+| **Execution accuracy**    | **0.667** (40/60) | 0.617 (37/60) | 0.567 (34/60) | 0.483 |
+| Validation pass rate      | 0.950 | 1.000 | 0.983 | 0.967 |
+| Execution rate            | 0.867 | 0.967 | 0.933 | 0.850 |
+| **Correct refusal rate**  | **1.000 (7/7)** | 1.000 (7/7) | 1.000 (7/7) | 0.857 (6/7) |
+| False refusal rate        | 0.017 | 0.000 | 0.017 | 0.050 |
+| Median latency            | 36.7 s | 38.5 s | 31.5 s | 50.2 s |
 
-| Bucket | Questions | `llama3.1:8b`, current | `llama3.1:8b`, earlier | `qwen2.5-coder:7b`, earlier |
-| ------------ | --- | ----- | ----- | ----- |
-| easy         | 8   | 1.000 | 0.875 | 0.250 |
-| filter       | 8   | 0.750 | 0.875 | 0.500 |
-| groupby      | 6   | 0.667 | 0.833 | 0.833 |
-| join         | 8   | 0.625 | 0.500 | 0.500 |
-| drifter      | 14  | 0.571 | 0.429 | 0.571 |
-| qc           | 5   | 0.600 | 0.400 | 0.400 |
-| bgc          | 5   | 0.400 | 0.400 | 0.600 |
-| window       | 6   | 0.167 | 0.167 | 0.167 |
-| unanswerable | 7   | **7/7 refused** | 7/7 refused | 6/7 refused |
+| Bucket | Questions | `llama3.1:8b`, current | `llama3.1:8b`, before the checks | `llama3.1:8b`, earlier | `qwen2.5-coder:7b`, earlier |
+| ------------ | --- | ----- | ----- | ----- | ----- |
+| easy         | 8   | 1.000 | 1.000 | 0.875 | 0.250 |
+| filter       | 8   | 1.000 | 0.750 | 0.875 | 0.500 |
+| groupby      | 6   | 0.667 | 0.667 | 0.833 | 0.833 |
+| join         | 8   | 0.625 | 0.625 | 0.500 | 0.500 |
+| drifter      | 14  | 0.500 | 0.571 | 0.429 | 0.571 |
+| qc           | 5   | 0.800 | 0.600 | 0.400 | 0.400 |
+| bgc          | 5   | 0.400 | 0.400 | 0.400 | 0.600 |
+| window       | 6   | 0.333 | 0.167 | 0.167 | 0.167 |
+| unanswerable | 7   | **7/7 refused** | 7/7 refused | 7/7 refused | 6/7 refused |
 
-Every column is one run. The two earlier columns were taken back to back on the same prompt and the same timeout, so they compare with each other; the current column differs from them in the prompt, the context window and the machine's memory, and compares with them only as a before and after. **0.567 to 0.617 is three questions, inside the swing of about a tenth that two identical runs have [shown here](#on-repeated-runs), so it does not show that the fix raised accuracy.** Five questions moved to right and two to wrong. What it does show is that the fix cost nothing, and that the number now describes the prompt the system was written to send.
+Every column is one run. The two earlier columns were taken back to back on the same prompt and the same timeout, so they compare with each other; the two newer columns differ from them in the prompt, the context window and the machine's memory, and compare with them only as a before and after. **0.567 to 0.617 was three questions and 0.617 to 0.667 is three more, each inside the swing of about a tenth that two identical runs have [shown here](#on-repeated-runs), so neither step shows by itself that accuracy rose.** The prompt fix moved five questions to right and two to wrong; what it showed is that the fix cost nothing, and that the number now describes the prompt the system was written to send. The checks have something the prompt fix did not, a mechanism that can be read off the run, described next.
+
+#### The answer checks, measured
+
+The current column is the first full run with the checks in [`src/sqlgen/checks.py`](src/sqlgen/checks.py) between the validator and the database, and with the benchmark repairing the same failures the app does. The run was stopped at question 25 and resumed with `--cache`, so the first 25 answers were replayed from the stopped run rather than generated again. Both halves ran the same code, and every answer is still one generation.
+
+Six questions moved to right and three to wrong:
+
+| Question | Before the checks | Current | What happened |
+| --- | --- | --- | --- |
+| How many profiles were recorded between 2010 and 2015? | wrong | right | the range check caught a query that stopped at the start of 2015, and the repair fixed it |
+| Number of profiles per region | wrong | right | the profile count check caught a join to measurements, and the repair fixed it |
+| Profiles per year with a running cumulative total | wrong | right | the same check, the same repair |
+| Number of drifter observations per month | wrong | right | the copied-filter check caught a date taken from the retrieved summaries, and the repair fixed it |
+| How many measurements are deeper than 1000 decibars? | wrong | right | no check fired: the model did not add the quality filter this time |
+| What percentage of measurements passed quality control each year? | wrong | right | no check fired |
+| Average surface temperature per year per region | right | wrong | timed out |
+| How many observations come from SVPB buoys? | right | wrong | an unknown column, `buoy_type`, which the repair kept |
+| How fast is the surface current on average in the Arabian Sea? | right | wrong | the region's name returned in a column beside the average; the comparison is shape-sensitive by design |
+
+Four of the six gains are a check naming a mistake and the one repair attempt fixing it, which a single run can show happened even though it cannot show how often it will. The other two gains and all three losses are the kind of movement the repeated-runs section records between identical configurations. Twelve repairs were attempted and five reached the right answer.
+
+Two repairs show the checks' limit. In "number of profiles per year" and "how many measurements belong to floats in the Southern Indian Ocean", the repaired query fixed what the check named and then copied a value from the retrieved summaries, a year in one and the project name in the other, so the second pass of the checks stopped it and the question failed rather than returning a wrong number. That is the intended failure, but it is still a failure, and it is most of why validation and execution fall from the column before: a query the checks stop counts as neither validated nor run. Twelve answerable questions still return the wrong rows without any error, and no check touches those.
 
 #### The prompt was being cut
 
@@ -615,7 +637,7 @@ So the earlier conclusion holds and now has evidence behind it: **that fabricati
 
 That conclusion was right and is now moot. Both halves of it assumed the choice was which model to ask, and the [scope gate](#closing-it-without-the-model) does not ask one: `llama3.1:8b` refuses the seafloor question now, not because it learned anything but because the question no longer reaches it. The lesson worth keeping is the one the section was written to make, that a fabrication surviving three rewordings is telling you something about where the rule belongs, rather than asking for a fourth.
 
-Validation pass rate is 1.000 while accuracy is 0.617. Every generated query was well formed and safe, and nearly four in ten still answered the wrong question. That gap is the entire argument for measuring results rather than liveness.
+Validation pass rate is 0.950 while accuracy is 0.667, and 12 of the 52 answerable queries that ran, nearly one in four, returned the wrong rows without any error. That gap is the entire argument for measuring results rather than liveness.
 
 #### On repeated runs
 
@@ -758,7 +780,7 @@ For the measurements the argument is stronger still. The answer to "average surf
 
 **Charts.** The map basemap is served locally. Plotly fetches the land and coastlines of a geo plot as TopoJSON at render time and defaults to `cdn.plot.ly`, which made the one networked dependency in an otherwise offline app a map that came up empty with no error to explain it. The files are committed under `web/public/topojson/` and Plotly is pointed there through `topojsonURL`. Trajectories, depth profiles, depth-time sections and T-S diagrams are drawn as interactive Plotly figures, dispatched on column names because latitude and longitude are two ordinary floats to a dtype check. Everything else falls through to the matplotlib line and bar builder, and a PNG is produced in every case so an image client keeps working. The dispatch is first-match, so a result carrying positions is always drawn as a track even when it also carries measurements.
 
-**Evaluation.** Text-to-SQL scores 0.617 execution accuracy over 67 questions on the shipped model. The earlier measurements, 0.567 on the same model and 0.483 on a second one, were taken on a previous prompt that may have been cut by the model's context window, and the second model has not been re-run since. Complex queries are much worse than either average suggests: the window bucket is 1 in 6 on **both** models, and worked examples, a repair attempt and a change of model have each failed to move it. Figures are single runs, and two back-to-back runs of an identical configuration disagreed on four of 46 questions, so none is precise to better than about a tenth. The repair loop recovered 2 queries of 4 attempts in the current run and cannot touch the 21 questions that fail by returning the wrong rows without an error. The seafloor fabrication and the current at 1000 decibars are both refused now, but by a lexical gate in front of the model rather than by anything the model learned, so the gold set measures the gate on those six questions and not the generator. A paraphrase the gate does not carry reaches the model exactly as before. Both columns come from one gold set written by the same person who wrote the schema, which is a real limit on what they can show.
+**Evaluation.** Text-to-SQL scores 0.667 execution accuracy over 67 questions on the shipped model with the answer checks in place, against 0.617 the day before without them, a difference of three questions. The earlier measurements, 0.567 on the same model and 0.483 on a second one, were taken on a previous prompt that may have been cut by the model's context window, and the second model has not been re-run since. Complex queries are much worse than the average suggests: the window bucket is 2 in 6, and the one it gained was a counting mistake a check caught rather than a window function the model learned; worked examples, a repair attempt and a change of model have each failed to move the rest. Figures are single runs, and two back-to-back runs of an identical configuration disagreed on four of 46 questions, so none is precise to better than about a tenth. The repair loop reached the right answer on 5 of 12 attempts in the current run, and neither it nor the checks can touch the 12 questions that fail by returning the wrong rows without an error. Twice the repair fixed what a check named and copied a value from the retrieved summaries instead, so the question failed rather than returning a wrong number. The seafloor fabrication and the current at 1000 decibars are both refused now, but by a lexical gate in front of the model rather than by anything the model learned, so the gold set measures the gate on those six questions and not the generator. A paraphrase the gate does not carry reaches the model exactly as before. Every column comes from one gold set written by the same person who wrote the schema, which is a real limit on what they can show.
 
 ## Roadmap
 
@@ -800,16 +822,17 @@ Done:
 - [x] Listing questions answered in full: "which floats carry oxygen sensors" returns all fifteen, written out and cited without a model call, where the model given all fifteen listed thirteen
 - [x] The three unanswerable summary questions declined by exact rules before the model, after calibration showed confidence cannot separate them
 - [x] The app and the benchmark repair the same failures: refusals and unsafe statements never, fixable validator rejections (an unknown column or table, a cross-platform join) once
+- [x] The full SQL benchmark re-run with the answer checks: 0.667 (40/60), 7/7 refusals, one run, with the first 25 answers replayed from a stopped run's cache
 - [x] Fewer waits per question: the model is held for 30 minutes after a call instead of Ollama's 5, both models load in the background at startup, and the router's rules now place all 67 SQL gold questions, 13 of which used to cost a 10 to 20 second routing call
 
 Not done, honestly:
 
 - [ ] Persist conversation history, which currently dies with the process
-- [ ] Re-run the full SQL benchmark after the answer checks, and with `--runs 3`, and re-run `qwen2.5-coder:7b`, so the current figure has a spread and the model comparison is on the current prompt. About three hours for llama alone on this machine, and only if nothing else is using its memory
+- [ ] Re-run the SQL benchmark with `--runs 3`, and re-run `qwen2.5-coder:7b`, so the current figure has a spread and the model comparison is on the current prompt. About three hours for llama alone on this machine, and only if nothing else is using its memory
 - [ ] Load the data the problem statement's own examples ask for. There are no profiles in the equatorial band in March 2023, and no BGC readings in the Arabian Sea in the last six months of the archive, so both examples return correct, empty queries
 - [ ] Rename the Southern Indian Ocean region, which is the fallback for anything outside the named basins and so includes floats north of the equator
 - [ ] A judge that is not the model under test, which is the honest limit of the generation scores
-- [ ] A larger model on the same 67 questions. Three prompt attempts, a repair loop and a second 7B model have all left the window bucket at 0.167, so the next honest experiment is more capacity rather than better wording
+- [ ] A larger model on the same 67 questions. Three prompt attempts, a repair loop and a second 7B model have all left the window bucket at 0.167, and the checks moved it to 0.333 only by catching a counting mistake, so the next honest experiment is more capacity rather than better wording
 - [ ] A cloud host. Deliberately not: the images are published and the arrangement is proven locally, and putting it on a paid instance is a decision rather than a task
 - [ ] A nitrate-carrying BGC float, since none of the sixteen sampled BGC floats has that sensor
 - [ ] Coarser summaries, by project or by year, before the fleet grows past what one sentence per float can hold
