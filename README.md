@@ -148,6 +148,8 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
+Then replace the two `change-me` passwords in `.env`, in the password lines and in the URLs beneath them. No default is committed, and `docker compose` refuses to start without them. They are fixed when the database volume is first created, so choose them before the first `up`; [`docs/deployment.md`](docs/deployment.md) covers changing them later.
+
 `sentence-transformers` pulls in torch, and on Windows the default PyPI wheel bundles CUDA at roughly 2.4 GB. The configured embedding model runs on CPU, so install the CPU build first and skip the download:
 
 ```bash

@@ -29,8 +29,10 @@ services:
     restart: unless-stopped
     build: .
     environment:
-      DATABASE__URL: ${DATABASE_URL:-postgresql://gda:gda_local_pw@db:5432/gda}
-      DATABASE__READONLY_URL: ${DATABASE_READONLY_URL:-postgresql://gda_ro:gda_ro_pw@db:5432/gda}
+      # The compose network's database unless DATABASE_URL points elsewhere.
+      # Either way the passwords come from .env, never from this file.
+      DATABASE__URL: ${DATABASE_URL:-postgresql://gda:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/gda}
+      DATABASE__READONLY_URL: ${DATABASE_READONLY_URL:-postgresql://gda_ro:${GDA_RO_PASSWORD:?set GDA_RO_PASSWORD in .env}@db:5432/gda}
       # OLLAMA_BASE_URL is deliberately not set here. Compose interpolates
       # ${...} from .env, where it is http://localhost:11434 because that is
       # right for the loaders and the harness, which run on the host. Inside a

@@ -83,10 +83,26 @@ generated SQL runs as.
 
 | Variable | Default | Why |
 | --- | --- | --- |
-| `POSTGRES_PASSWORD` | `gda_local_pw` | A literal in `docker-compose.yml`, not read from the environment: edit the file. The read-only role's password is set in `db/003_roles.sql` |
-| `DATABASE_URL` | the same | Both roles' passwords are the committed defaults |
+| `POSTGRES_PASSWORD` | none, required | The owning role's password, read from `.env`. Compose refuses to start without it |
+| `GDA_RO_PASSWORD` | none, required | The read-only role's password, set by `db/003_roles_password.sh` when the volume is created |
+| `DATABASE_URL`, `DATABASE_READONLY_URL` | built from the two passwords and the compose network's `db` | Set only to use a database outside the compose file |
 | `WEB_PORT` | `80` | Put a TLS terminator in front, or change the port |
 | `GENERATION_MODEL` | `llama3.1:latest` | |
+
+No password is committed, so there is no default to forget to change. Both are
+used only when the volume is first created, which means editing `.env` later
+changes nothing inside the database. To change them on an existing one:
+
+```bash
+docker compose exec db psql -U gda -d gda
+```
+
+then `\password gda` and `\password gda_ro` at the prompt, which read the new
+value without echoing it or leaving it in shell history. Put the same values in
+`.env`, in the two password lines and in both URLs, and run `docker compose up
+-d` so the API is recreated with them. Earlier versions of this repository
+committed fixed passwords; a database created from one of those should have
+both changed this way.
 
 The read-only role is not a formality. Generated SQL executes as `gda_ro`,
 which is what makes the validator a second line rather than the only one.
@@ -107,8 +123,9 @@ before it serves anything.
 - **No autoscaling, no managed database.** One compose file on one host. For
   ECS or similar, the images are the unit of work and the arrangement above is
   the shape; the compose file is not a task definition.
-- **No secret management.** Passwords come from the environment, and the
-  defaults are committed.
+- **No secret management.** Passwords come from `.env` on the host rather than
+  from a secret store. None is committed, and compose will not start without
+  them.
 - **Not load tested.** Generation is single-threaded through one Ollama
   instance. Concurrent questions queue, and on modest hardware each takes tens
   of seconds, so this arrangement serves a small number of users.

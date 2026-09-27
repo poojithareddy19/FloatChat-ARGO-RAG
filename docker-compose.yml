@@ -13,12 +13,21 @@ services:
       context: ./db
     image: gda-postgis-pgvector:16
     container_name: gda_postgres
+    # Passwords come from .env (see .env.example) and are never written here.
+    # Compose refuses to start without them rather than falling back to a
+    # default, because any default committed to a public repository is public.
+    # They take effect only when the volume is first created; see
+    # docs/deployment.md for changing them on an existing database.
     environment:
       POSTGRES_USER: gda
-      POSTGRES_PASSWORD: gda_local_pw
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: gda
+      # Read by db/003_roles_password.sh to set the read-only role's password.
+      GDA_RO_PASSWORD: ${GDA_RO_PASSWORD:?set GDA_RO_PASSWORD in .env}
+    # Published on the loopback interface only. gda owns the database and is a
+    # superuser, so it is reachable from this machine and not from its network.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d:ro
@@ -35,13 +44,13 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE__URL: postgresql://gda:gda_local_pw@db:5432/gda
-      DATABASE__READONLY_URL: postgresql://gda_ro:gda_ro_pw@db:5432/gda
+      DATABASE__URL: postgresql://gda:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/gda
+      DATABASE__READONLY_URL: postgresql://gda_ro:${GDA_RO_PASSWORD:?set GDA_RO_PASSWORD in .env}@db:5432/gda
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       GENERATION__PROVIDER: ollama
       GENERATION__MODEL: llama3.1:latest
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

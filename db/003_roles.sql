@@ -9,9 +9,11 @@ BEGIN
         FROM pg_roles
         WHERE rolname = 'gda_ro'
     ) THEN
+        -- No password here: db/003_roles_password.sh sets it from the
+        -- environment, so none is committed. Run by hand, set one with
+        -- ALTER ROLE gda_ro PASSWORD '...' before connecting as it.
         CREATE ROLE gda_ro
-            LOGIN
-            PASSWORD 'gda_ro_pw';
+            LOGIN;
     END IF;
 END
 $$;
